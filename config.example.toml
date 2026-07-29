@@ -1,0 +1,32 @@
+# Example: Vibe coding sessions
+[domains.sessions]
+dir = "~/.vibe/logs/session"
+pattern = "session_*"
+type = "dirs"
+extractor = "jsonl"
+label = "session"
+filters = ["role"]
+
+# Example: Meeting transcripts
+[domains.transcripts]
+dir = "~/Dropbox/Apps/Tactiq.io"
+pattern = "*"
+extensions = [".txt", ".docx"]
+extractor = "transcript"
+label = "transcript"
+filters = ["speaker"]
+
+# Example: Notifications
+[domains.notifications]
+dir = "~/.vibe/notification-logs"
+pattern = "teams-*.jsonl"
+extractor = "notification"
+label = "notification log"
+
+# Optional: Vibe command history
+[history]
+file = "~/.vibe/vibehistory"
+
+# Optional: Vibe runtime log
+[log]
+file = "~/.vibe/logs/vibe.log"
