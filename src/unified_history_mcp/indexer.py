@@ -1,6 +1,6 @@
 """FST indexer subprocess wrapper.
 
-Interfaces with the `fst-indexer` binary (https://github.com/archiewood/fst-indexer).
+Interfaces with the `fst-indexer` binary (https://github.com/jmars/fst-indexer).
 """
 
 import json
@@ -18,10 +18,9 @@ def _iter_domain_files(cfg: DomainConfig) -> list[Path]:
         return []
 
     if cfg.type == "dirs":
-        items = [p for p in root.iterdir() if p.is_dir() and root.name]
-        # Apply pattern filtering for dir names
         import fnmatch
 
+        items = [p for p in root.iterdir() if p.is_dir()]
         items = [p for p in items if fnmatch.fnmatch(p.name, cfg.pattern)]
     else:
         items = []
@@ -37,53 +36,36 @@ def _iter_domain_files(cfg: DomainConfig) -> list[Path]:
     )
 
 
-def _files_list_path(index_dir: Path) -> Path:
-    """Path to the file list that maps file_idx to actual filenames."""
-    return index_dir / "files.json"
+def _load_manifest(index_dir: Path) -> Optional[list[dict]]:
+    """Load the Rust indexer's manifest.json to resolve file_idx -> filename.
 
-
-def _save_files_list(index_dir: Path, files: list[Path]) -> None:
-    """Save the list of indexed files so file_idx can be resolved later."""
-    index_dir.mkdir(parents=True, exist_ok=True)
-    relative_paths = [str(f.relative_to(f.parent)) for f in files]
-    _files_list_path(index_dir).write_text(
-        json.dumps(relative_paths, indent=2), encoding="utf-8"
-    )
-
-
-def _load_files_list(index_dir: Path) -> Optional[list[str]]:
-    """Load the saved file list. Returns None if not available."""
-    fp = _files_list_path(index_dir)
-    if not fp.exists():
+    The Rust binary writes manifest.json in the same order it assigns file_idx,
+    so files[N] in the manifest corresponds to file_idx=N in search results.
+    """
+    manifest_path = index_dir / "manifest.json"
+    if not manifest_path.exists():
         return None
     try:
-        return json.loads(fp.read_text(encoding="utf-8", errors="replace"))
+        data = json.loads(manifest_path.read_text(encoding="utf-8", errors="replace"))
+        return data.get("files", [])
     except (json.JSONDecodeError, OSError):
         return None
 
 
 def build_index(cfg: DomainConfig, index_dir: Optional[str] = None) -> tuple[bool, str]:
-    """Run fst-indexer build for a domain. Returns (success, message).
-
-    The indexer pipes file contents via stdin to the 'fst-indexer build' command,
-    which indexes each entry and writes the FST index to the output directory.
-    """
+    """Run fst-indexer build for a domain. Returns (success, message)."""
     binary = cfg.fst_binary or "fst-indexer"
     out_dir = Path(index_dir).expanduser().resolve() if index_dir else cfg.effective_index_dir
 
-    # Gather files
     files = _iter_domain_files(cfg)
     if not files:
         return False, f"No files found for domain '{cfg.name}' in {cfg.dir}"
-
-    # Save file list for later resolution
-    _save_files_list(out_dir, files)
 
     try:
         cmd = [
             binary,
             "build",
-            "--dir", str(cfg.dir),
+            "--dir", str(cfg.dir.resolve()),
             "--pattern", cfg.pattern,
             "--extractor", cfg.extractor,
             "--output", str(out_dir),
@@ -114,12 +96,12 @@ def search_fst(
 ) -> Optional[list[dict]]:
     """Search via FST. Returns list of {file_idx, entry_idx} or None on failure.
 
-    The caller should map file_idx to actual filenames using the saved file list
-    for the corresponding index directory.
+    The Rust binary always writes index files as 'index.fst' in the output directory.
+    File resolution uses the Rust-generated manifest.json for correct file_idx mapping.
     """
     binary = cfg.fst_binary or "fst-indexer"
     idx_dir = Path(index_dir).expanduser().resolve() if index_dir else cfg.effective_index_dir
-    idx_file = idx_dir / f"{cfg.name}.fst"
+    idx_file = idx_dir / "index.fst"
 
     if not idx_file.exists():
         return None
@@ -143,8 +125,8 @@ def search_fst(
 
 
 def resolve_file_idx(index_dir: Path, file_idx: int) -> Optional[str]:
-    """Resolve a file_idx to an actual filename using the saved file list."""
-    files = _load_files_list(index_dir)
+    """Resolve a file_idx to an actual filename using the Rust manifest.json."""
+    files = _load_manifest(index_dir)
     if files is None or file_idx < 0 or file_idx >= len(files):
         return None
-    return files[file_idx]
+    return files[file_idx].get("filename")

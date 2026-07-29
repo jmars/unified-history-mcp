@@ -4,7 +4,12 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-import tomllib
+
+# tomllib is stdlib in Python 3.11+; fall back to tomli for 3.10
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore
 
 
 @dataclass

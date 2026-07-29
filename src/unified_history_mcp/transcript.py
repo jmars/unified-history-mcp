@@ -61,7 +61,7 @@ def _docx_to_standard_txt(p: Path) -> str:
     body = lines[transcript_start:]
     # Clean blank lines at the start
     while body and not body[0].strip():
-        body = body[0:]
+        body = body[1:]
 
     # Convert speaker format: "00:00 Phil Miller:" or "00:00 Phil Miller: text"
     # to "Phil Miller (00:00:00)" on its own line, text on following lines
@@ -147,6 +147,7 @@ def parse_transcript(text: str) -> dict:
                 result["participants"] = [p.strip() for p in line[len("Participants:"):].strip().split(",") if p.strip()]
     current_speaker = current_ts = None
     current_text: list[str] = []
+    current_line_start = 0
     for i in range(header_end + 1, len(lines)):
         line = lines[i]
         m = SPEAKER_HEADER_RE.match(line.strip())
@@ -156,10 +157,13 @@ def parse_transcript(text: str) -> dict:
                     "speaker": current_speaker,
                     "timestamp": current_ts,
                     "text": "\n".join(current_text).strip(),
+                    "line_start": current_line_start,
+                    "line_end": i - 1,
                 })
             current_speaker = m.group("name")
             current_ts = m.group("ts")
             current_text = []
+            current_line_start = i
         elif current_speaker is not None:
             current_text.append(line)
     if current_speaker is not None:
@@ -167,6 +171,8 @@ def parse_transcript(text: str) -> dict:
             "speaker": current_speaker,
             "timestamp": current_ts,
             "text": "\n".join(current_text).strip(),
+            "line_start": current_line_start,
+            "line_end": len(lines) - 1,
         })
     return result
 

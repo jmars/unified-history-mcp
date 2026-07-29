@@ -267,7 +267,7 @@ def _read_transcript_turns(p: Path, max_n: int, speaker: str | None) -> list[dic
     return turns[:max_n]
 
 
-def _read_notify_entries(p: Path, max_n: int) -> list[dict]:
+def _read_notify_entries(p: Path, max_n: int, _filter: str | None = None) -> list[dict]:
     try:
         with open(p, encoding="utf-8", errors="replace") as f:
             lines = [ln.strip() for ln in f if ln.strip()]
@@ -362,7 +362,10 @@ def _resolve_cfg(name: str) -> DomainConfig | None:
 
 
 def _resolve_file(cfg: DomainConfig, id: str) -> Path | None:
-    """Resolve a file/directory ID to a path."""
+    """Resolve a file/directory ID to a path. Rejects path traversal."""
+    # Reject IDs containing path traversal sequences
+    if ".." in Path(id).parts or id.startswith("/"):
+        return None
     if cfg.type == "dirs":
         candidates = sorted(cfg.dir.glob(f"{id}*"))
     else:
@@ -372,7 +375,13 @@ def _resolve_file(cfg: DomainConfig, id: str) -> Path | None:
         else:
             candidates = sorted(cfg.dir.rglob(f"{id}*"))
         candidates = [c for c in candidates if c.is_file() and c.exists()]
-    return candidates[0] if candidates else None
+    if not candidates:
+        return None
+    # Verify candidate stays within the domain directory
+    resolved = candidates[0].resolve()
+    if not str(resolved).startswith(str(cfg.dir.resolve())):
+        return None
+    return candidates[0]
 
 
 # ---------------------------------------------------------------------------
@@ -941,7 +950,6 @@ def _format_search_results(
             continue
 
         rdate_str = r.get("date", "?")
-        lineno = entry_idx + 1  # Convert to 1-based line number
 
         # Date filter
         if rdate_str and rdate_str != "?":
@@ -954,7 +962,7 @@ def _format_search_results(
             except ValueError:
                 pass
 
-        # Read actual line content
+        # Resolve file path
         if r_domain == "sessions":
             file_path = d_cfg.dir / fname / "messages.jsonl"
         else:
@@ -963,51 +971,67 @@ def _format_search_results(
         if not file_path.exists():
             continue
 
-        try:
-            if r_domain == "transcripts":
-                text = _read_transcript_text(file_path)
-                lines = text.splitlines() if text else []
-            else:
+        # --- Resolve entry_idx to actual content ---
+        # Transcripts: entry_idx is a turn index (re-parse and index into turns)
+        # Everything else: entry_idx is a 0-based line number
+        if r_domain == "transcripts":
+            try:
+                parsed = parse_transcript_file(file_path)
+            except OSError:
+                continue
+            turns = parsed.get("turns", [])
+            if entry_idx < 0 or entry_idx >= len(turns):
+                continue
+            turn = turns[entry_idx]
+            matched_line = turn.get("text", "")
+            turn_speaker = turn.get("speaker", "")
+
+            # Speaker filter (check actual turn speaker)
+            if speaker and speaker.lower() not in turn_speaker.lower():
+                continue
+
+            # Context: first line of turn text
+            turn_lines = matched_line.splitlines() if matched_line else []
+            display = (turn_lines[0] if turn_lines else "")[:300]
+            ctx_before = []
+            ctx_after = turn_lines[1:1 + context_lines] if len(turn_lines) > 1 else []
+        else:
+            lineno = entry_idx + 1  # Convert to 1-based line number
+            try:
                 lines = file_path.read_text(
                     encoding="utf-8", errors="replace"
                 ).splitlines()
-        except OSError:
-            continue
-
-        if not lines or lineno < 1 or lineno > len(lines):
-            continue
-
-        matched_line = lines[lineno - 1].strip()
-
-        if post_pat and not post_pat.search(matched_line):
-            continue
-
-        # Role filter (sessions only)
-        if role and r_domain == "sessions":
-            try:
-                msg = json.loads(matched_line)
-                if msg.get("role", "").lower() != role.lower():
-                    continue
-            except json.JSONDecodeError:
-                if role.lower() != "user":
-                    continue
-
-        # Speaker filter (transcripts via FST metadata)
-        if speaker:
-            r_speaker = r.get("speaker", "") or ""
-            if speaker.lower() not in r_speaker.lower():
+            except OSError:
                 continue
 
-        ctx_before = lines[max(0, lineno - 1 - context_lines) : lineno - 1]
-        ctx_after = lines[lineno : lineno + context_lines]
-        display = _msg_snippet(matched_line)
+            if not lines or lineno < 1 or lineno > len(lines):
+                continue
+
+            matched_line = lines[lineno - 1].strip()
+
+            if post_pat and not post_pat.search(matched_line):
+                continue
+
+            # Role filter (sessions only)
+            if role and r_domain == "sessions":
+                try:
+                    msg = json.loads(matched_line)
+                    if msg.get("role", "").lower() != role.lower():
+                        continue
+                except json.JSONDecodeError:
+                    if role.lower() != "user":
+                        continue
+
+            ctx_before = lines[max(0, lineno - 1 - context_lines) : lineno - 1]
+            ctx_after = lines[lineno : lineno + context_lines]
+            display = _msg_snippet(matched_line)
 
         all_matches.append(
             {
                 "file_id": fname,
                 "source": r_domain,
                 "date": rdate_str,
-                "line": lineno,
+                "line": entry_idx if r_domain == "transcripts" else lineno,
                 "match": display,
                 "context_before": [l[:300] for l in ctx_before],
                 "context_after": [l[:300] for l in ctx_after],
