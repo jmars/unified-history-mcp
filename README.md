@@ -5,7 +5,8 @@
 ## Quick Start
 
 ```bash
-pip install unified-history-mcp
+# Install from source (PyPI package coming soon)
+pip install git+https://github.com/jmars/unified-history-mcp.git
 
 # Create a config file at ~/.config/unified-history-mcp/config.toml
 # or use the example as a starting point:
@@ -147,7 +148,26 @@ Search the runtime log file.
 
 1. **Configuration** — TOML file defines domains, their directories, extractors, and renderers.
 2. **Domain Discovery** — Files are discovered via glob patterns with extension filtering.
-3. **Fast Path (FST)** — If the `fst-indexer` binary is installed and indexes are built (via the `rebuild` tool), searches use the blazing-fast FST index.
+3. **Fast Path (FST)** — If the optional [`fst-indexer`](https://github.com/jmars/fst-indexer) binary is installed and indexes are built (via the `rebuild` tool), searches use the blazing-fast FST index.
 4. **Slow Path (Regex)** — Falls back to line-by-line regex scanning across files when FST is unavailable.
 5. **Extractors** — Produce text entries for FST indexing from different file formats (JSONL, TXT, Tactiq transcripts, notifications).
 6. **Renderers** — Format entries for human-readable display in search results, listings, and read output.
+
+## Development
+
+```bash
+git clone https://github.com/jmars/unified-history-mcp.git
+cd unified-history-mcp
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
+```
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on setting up the dev environment, running tests, and submitting pull requests.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

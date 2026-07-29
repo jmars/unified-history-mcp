@@ -5,19 +5,23 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from xml.etree import ElementTree as ET
-from zipfile import ZipFile
+from zipfile import BadZipFile, ZipFile
 
 _DOCX_NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 SPEAKER_HEADER_RE = re.compile(r"^(?P<name>.+?)\s+\((?P<ts>\d{2}:\d{2}:\d{2})\)\s*$")
 
 
 def _extract_docx_text(p: Path) -> str:
-    """Extract plain text from a Tactiq-synced .docx transcript."""
+    """Extract plain text from a Tactiq-synced .docx transcript.
+
+    Note: ET.parse is used on user-owned .docx files from a trusted local
+    sync directory. Not exposed to untrusted network input.
+    """
     try:
         with ZipFile(p) as z:
             with z.open("word/document.xml") as f:
                 tree = ET.parse(f)
-    except (OSError, ET.ParseError, KeyError):
+    except (OSError, ET.ParseError, KeyError, BadZipFile):
         return ""
     paras = []
     for para in tree.iterfind(".//w:p", _DOCX_NS):
@@ -106,7 +110,7 @@ def _docx_to_standard_txt(p: Path) -> str:
     return "\n".join(out_lines)
 
 
-def _read_transcript_text(p: Path) -> str:
+def read_transcript_text(p: Path) -> str:
     """Read text content from a transcript file (.txt or .docx)."""
     if p.suffix.lower() == ".docx":
         return _docx_to_standard_txt(p)
@@ -179,7 +183,7 @@ def parse_transcript(text: str) -> dict:
 
 @lru_cache(maxsize=128)
 def _parse_transcript_cached(path_str: str, mtime_ns: int) -> dict:
-    return parse_transcript(_read_transcript_text(Path(path_str)))
+    return parse_transcript(read_transcript_text(Path(path_str)))
 
 
 def parse_transcript_file(p: Path) -> dict:

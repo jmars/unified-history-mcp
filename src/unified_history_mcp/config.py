@@ -1,4 +1,4 @@
-"""Domain configuration — loaded from unified-history.toml."""
+"""Domain configuration — loaded from a TOML config file."""
 
 import os
 from dataclasses import dataclass, field
@@ -26,7 +26,6 @@ class DomainConfig:
     label: str = "file"
     fst_binary: str = "fst-indexer"
     fst_index_dir: Optional[str] = None
-    date_field: Optional[str] = None
     filters: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
@@ -116,7 +115,6 @@ def load_config(path: Optional[Path] = None) -> Config:
             label=str(d.get("label", "file")),
             fst_binary=str(d.get("fst_binary", "fst-indexer")),
             fst_index_dir=d.get("fst_index_dir"),
-            date_field=d.get("date_field"),
             filters=filters_list,
         )
         cfg.domains[name] = domain_cfg

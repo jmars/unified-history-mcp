@@ -18,27 +18,22 @@ Tools:
 """
 
 import json
-import os
 import re
-import subprocess
 from datetime import date, datetime
-from functools import lru_cache
 from pathlib import Path
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
 from .config import Config, DomainConfig, load_config
-from .extractors import extract_jsonl, extract_txt, extract_transcript, extract_notification
 from .renderers import render_list_entry, render_read_entry
-from .transcript import parse_transcript, parse_transcript_file, _read_transcript_text
-from .indexer import build_index, search_fst, resolve_file_idx, _iter_domain_files as _indexer_iter_files
+from .transcript import parse_transcript_file, read_transcript_text
+from .indexer import build_index, search_fst, resolve_file_idx, _iter_domain_files
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def _get_config() -> Config:
@@ -68,28 +63,6 @@ def _load_json(path: Path) -> dict | None:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError):
         return None
-
-
-def _iter_domain_files(cfg: DomainConfig) -> list[Path]:
-    """Return domain files/dirs, newest first."""
-    root = cfg.dir
-    if not root.is_dir():
-        return []
-
-    if cfg.type == "dirs":
-        items = [p for p in root.iterdir() if p.is_dir() and p.name.startswith(cfg.pattern.replace("*", ""))]
-    else:
-        items = []
-        for p in root.rglob(cfg.pattern):
-            if p.is_dir():
-                continue
-            if cfg.extensions and p.suffix.lower() not in cfg.extensions:
-                continue
-            items.append(p)
-
-    return sorted(
-        items, key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True
-    )
 
 
 def _msg_snippet(line: str) -> str:
@@ -129,7 +102,7 @@ def _session_date_from_dir(d: Path) -> date | None:
 
 
 def _transcript_date(p: Path) -> date | None:
-    raw = _read_transcript_text(p)
+    raw = read_transcript_text(p)
     if not raw:
         return None
     m = re.search(r"^Date:\s*(\d{4}-\d{2}-\d{2})", raw, re.MULTILINE)
@@ -311,7 +284,7 @@ def _session_search_lines(d: Path) -> list[str]:
 
 
 def _transcript_search_lines(p: Path) -> list[str]:
-    text = _read_transcript_text(p)
+    text = read_transcript_text(p)
     return text.splitlines() if text else []
 
 
@@ -362,24 +335,36 @@ def _resolve_cfg(name: str) -> DomainConfig | None:
 
 
 def _resolve_file(cfg: DomainConfig, id: str) -> Path | None:
-    """Resolve a file/directory ID to a path. Rejects path traversal."""
-    # Reject IDs containing path traversal sequences
+    """Resolve a file/directory ID to a path. Rejects path traversal.
+
+    The ``id`` parameter comes from the MCP client (typically an LLM)
+    and must not escape the configured domain directory.
+    """
+    import glob as _glob
+
+    # Reject empty IDs and path traversal sequences
+    if not id or id.isspace():
+        return None
     if ".." in Path(id).parts or id.startswith("/"):
         return None
     if cfg.type == "dirs":
-        candidates = sorted(cfg.dir.glob(f"{id}*"))
+        candidates = sorted(cfg.dir.glob(_glob.escape(id) + "*"))
     else:
-        exact_extensions = {".txt", ".jsonl", ".docx"}
-        if any(id.endswith(ext) for ext in exact_extensions):
-            candidates = sorted(cfg.dir.rglob(id))
+        # Build exact-extension set from the domain config
+        if cfg.extensions:
+            exact_extensions = set(cfg.extensions)
         else:
-            candidates = sorted(cfg.dir.rglob(f"{id}*"))
+            exact_extensions = {".txt", ".jsonl", ".docx"}
+        if any(id.endswith(ext) for ext in exact_extensions):
+            candidates = sorted(cfg.dir.rglob(_glob.escape(id)))
+        else:
+            candidates = sorted(cfg.dir.rglob(_glob.escape(id) + "*"))
         candidates = [c for c in candidates if c.is_file() and c.exists()]
     if not candidates:
         return None
     # Verify candidate stays within the domain directory
     resolved = candidates[0].resolve()
-    if not str(resolved).startswith(str(cfg.dir.resolve())):
+    if not resolved.is_relative_to(cfg.dir.resolve()):
         return None
     return candidates[0]
 
@@ -802,6 +787,9 @@ def search_history(
         return "No history file found."
 
     flags = 0 if case_sensitive else re.IGNORECASE
+    if regex:
+        if re.search(r"(\+\s*\)|\*\s*\)|\}\s*\))\s*[+*]", query):
+            return "Potentially unsafe regex - nested quantifiers detected."
     try:
         pattern = re.compile(query, flags) if regex else re.compile(
             re.escape(query), flags
@@ -854,6 +842,9 @@ def search_log(
         return "No log file found."
 
     flags = 0 if case_sensitive else re.IGNORECASE
+    if regex:
+        if re.search(r"(\+\s*\)|\*\s*\)|\}\s*\))\s*[+*]", query):
+            return "Potentially unsafe regex - nested quantifiers detected."
     try:
         pattern = re.compile(query, flags) if regex else re.compile(
             re.escape(query), flags

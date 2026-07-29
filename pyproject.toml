@@ -4,15 +4,49 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unified-history-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Config-driven MCP server for cross-domain search across agent session logs, meeting transcripts, and notification files"
 license = {text = "MIT"}
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.20,<2"]
+authors = [
+    {name = "Jaye Marshall", email = "josh@joshuamarshall.io"},
+]
+keywords = ["mcp", "search", "full-text", "session-logs", "transcripts", "notifications"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: Log Analysis",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "mcp>=1.23,<2",
+    "tomli>=1.0; python_version < '3.11'",
+]
+
+[project.urls]
+Homepage = "https://github.com/jmars/unified-history-mcp"
+Repository = "https://github.com/jmars/unified-history-mcp"
+Issues = "https://github.com/jmars/unified-history-mcp/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+]
 
 [project.scripts]
 unified-history-mcp = "unified_history_mcp.server:main"
+
+[tool.hatch.version]
+path = "src/unified_history_mcp/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/unified_history_mcp"]

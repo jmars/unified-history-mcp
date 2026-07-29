@@ -1,32 +1,32 @@
-# Example: Vibe coding sessions
+# Example: Agent coding session logs (e.g. Vibe, Claude Code, etc.)
 [domains.sessions]
-dir = "~/.vibe/logs/session"
+dir = "~/.vibe/logs/session"     # Change to your session log directory
 pattern = "session_*"
 type = "dirs"
 extractor = "jsonl"
 label = "session"
 filters = ["role"]
 
-# Example: Meeting transcripts
+# Example: Meeting transcripts (Tactiq)
 [domains.transcripts]
-dir = "~/Dropbox/Apps/Tactiq.io"
+dir = "~/Dropbox/Apps/Tactiq.io"  # Change to your transcript directory
 pattern = "*"
 extensions = [".txt", ".docx"]
 extractor = "transcript"
 label = "transcript"
 filters = ["speaker"]
 
-# Example: Notifications
+# Example: Notification logs
 [domains.notifications]
-dir = "~/.vibe/notification-logs"
+dir = "~/.vibe/notification-logs"  # Change to your notification log directory
 pattern = "teams-*.jsonl"
 extractor = "notification"
 label = "notification log"
 
-# Optional: Vibe command history
+# Optional: Command history file (plain text, one command per line)
 [history]
 file = "~/.vibe/vibehistory"
 
-# Optional: Vibe runtime log
+# Optional: Runtime log file
 [log]
 file = "~/.vibe/logs/vibe.log"
