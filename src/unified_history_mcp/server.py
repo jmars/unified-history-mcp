@@ -403,6 +403,8 @@ def _resolve_file(cfg: DomainConfig, id: str) -> Path | None:
         return None
     if cfg.type == "dirs":
         candidates = sorted(cfg.dir.glob(_glob.escape(id) + "*"))
+        if not candidates:
+            candidates = sorted(cfg.dir.glob("*" + _glob.escape(id)))
     else:
         # Build exact-extension set from the domain config
         if cfg.extensions:
