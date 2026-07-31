@@ -128,6 +128,8 @@ _DATE_EXTRACTORS = {
     "sessions": _session_date_from_dir,
     "transcripts": _transcript_date,
     "notifications": _notify_date,
+    "web-archive": _notify_date,
+    "dns-whois": _notify_date,
 }
 
 
@@ -194,6 +196,8 @@ _LIST_META = {
     "sessions": _list_session_meta,
     "transcripts": _list_transcript_meta,
     "notifications": _list_notify_meta,
+    "web-archive": _list_notify_meta,
+    "dns-whois": _list_notify_meta,
 }
 
 
@@ -257,10 +261,30 @@ def _read_notify_entries(p: Path, max_n: int, _filter: str | None = None) -> lis
     return entries
 
 
+def _read_jsonl_entries(p: Path, max_n: int, _filter: str | None = None) -> list[dict]:
+    """Generic JSONL read: each line is a JSON object, newest first."""
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
+    except OSError:
+        return []
+    lines.reverse()
+    lines = lines[:max_n]
+    entries = []
+    for line in lines:
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            entries.append({"raw": line})
+    return entries
+
+
 _READ_ENTRIES = {
     "sessions": _read_session_messages,
     "transcripts": _read_transcript_turns,
     "notifications": _read_notify_entries,
+    "web-archive": _read_jsonl_entries,
+    "dns-whois": _read_jsonl_entries,
 }
 
 
@@ -296,10 +320,32 @@ def _notify_search_lines(p: Path) -> list[str]:
         return []
 
 
+def _jsonl_search_lines(p: Path) -> list[str]:
+    """Generic JSONL search: extract 'content' field if present, else raw line."""
+    try:
+        lines = []
+        with open(p, encoding="utf-8", errors="replace") as f:
+            for ln in f:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                try:
+                    obj = json.loads(ln)
+                    content = obj.get("content", "")
+                    lines.append(content if content else ln)
+                except json.JSONDecodeError:
+                    lines.append(ln)
+        return lines
+    except OSError:
+        return []
+
+
 _SEARCH_LINES = {
     "sessions": _session_search_lines,
     "transcripts": _transcript_search_lines,
     "notifications": _notify_search_lines,
+    "web-archive": _jsonl_search_lines,
+    "dns-whois": _jsonl_search_lines,
 }
 
 

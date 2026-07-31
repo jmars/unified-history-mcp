@@ -113,7 +113,6 @@ def search_fst(
             "-i", str(idx_dir),
             query,
             "--max", str(max_results * 20),  # Fetch extra for post-filtering
-            "--json",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         if result.returncode != 0:
