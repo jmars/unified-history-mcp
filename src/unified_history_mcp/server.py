@@ -130,6 +130,7 @@ _DATE_EXTRACTORS = {
     "notifications": _notify_date,
     "web-archive": _notify_date,
     "dns-whois": _notify_date,
+    "image-analysis": _notify_date,
 }
 
 
@@ -198,6 +199,7 @@ _LIST_META = {
     "notifications": _list_notify_meta,
     "web-archive": _list_notify_meta,
     "dns-whois": _list_notify_meta,
+    "image-analysis": _list_notify_meta,
 }
 
 
@@ -285,6 +287,7 @@ _READ_ENTRIES = {
     "notifications": _read_notify_entries,
     "web-archive": _read_jsonl_entries,
     "dns-whois": _read_jsonl_entries,
+    "image-analysis": _read_jsonl_entries,
 }
 
 
@@ -346,6 +349,7 @@ _SEARCH_LINES = {
     "notifications": _notify_search_lines,
     "web-archive": _jsonl_search_lines,
     "dns-whois": _jsonl_search_lines,
+    "image-analysis": _jsonl_search_lines,
 }
 
 
